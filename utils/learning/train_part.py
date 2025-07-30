@@ -13,6 +13,7 @@ from utils.common.loss_function import SSIMLoss
 from utils.model.varnet import VarNet
 
 import os
+import wandb  # WandB 임포트 추가
 
 def train_epoch(args, epoch, model, data_loader, optimizer, loss_type):
     model.train()
@@ -108,15 +109,28 @@ def train(args):
     best_val_loss = 1.
     start_epoch = 0
 
-    
-    train_loader = create_data_loaders(data_path = args.data_path_train, args = args, shuffle=True)
-    val_loader = create_data_loaders(data_path = args.data_path_val, args = args)
+    wandb.init(project="varnet-training", config={
+        "learning_rate": args.lr,
+        "num_epochs": args.num_epochs,
+        "batch_size": args.batch_size,
+        "cascade": args.cascade,
+        "chans": args.chans,
+        "sens_chans": args.sens_chans,
+        # 다른 args 하이퍼파라미터도 필요에 따라 추가
+    })
+
+    train_loader = create_data_loaders(data_path=args.data_path_train, args=args, shuffle=True)
+    val_loader = create_data_loaders(data_path=args.data_path_val, args=args)
     
     val_loss_log = np.empty((0, 2))
     for epoch in range(start_epoch, args.num_epochs):
         print(f'Epoch #{epoch:2d} ............... {args.net_name} ...............')
         
         train_loss, train_time = train_epoch(args, epoch, model, train_loader, optimizer, loss_type)
+        
+        # WandB에 train_loss와 train_time 로깅
+        wandb.log({"epoch": epoch, "train_loss": train_loss, "train_time": train_time})
+        
         val_loss, num_subjects, reconstructions, targets, inputs, val_time = validate(args, model, val_loader)
         
         val_loss_log = np.append(val_loss_log, np.array([[epoch, val_loss]]), axis=0)
@@ -129,6 +143,9 @@ def train(args):
         num_subjects = torch.tensor(num_subjects).cuda(non_blocking=True)
 
         val_loss = val_loss / num_subjects
+
+        # WandB에 val_loss와 val_time 로깅
+        wandb.log({"epoch": epoch, "val_loss": val_loss.item(), "val_time": val_time})
 
         is_new_best = val_loss < best_val_loss
         best_val_loss = min(best_val_loss, val_loss)
@@ -146,3 +163,6 @@ def train(args):
             print(
                 f'ForwardTime = {time.perf_counter() - start:.4f}s',
             )
+
+    # 학습 종료 후 WandB 세션 종료
+    wandb.finish()
