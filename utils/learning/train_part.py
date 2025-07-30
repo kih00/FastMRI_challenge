@@ -109,7 +109,11 @@ def train(args):
     best_val_loss = 1.
     start_epoch = 0
 
-    wandb.init(project="varnet-training", config={
+    wandb.init(
+        entity="inho524890-seoul-national-university",
+        project="FastMRI 2025",
+        name="baseline"+str(args.num_epochs),
+        config={
         "learning_rate": args.lr,
         "num_epochs": args.num_epochs,
         "batch_size": args.batch_size,
